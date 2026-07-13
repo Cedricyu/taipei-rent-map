@@ -1,0 +1,766 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>台北租屋分析地圖｜台北市 + 中永和</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+:root {
+  --surface-1: #fcfcfb;
+  --page: #f9f9f7;
+  --ink-1: #0b0b0b;
+  --ink-2: #52514e;
+  --muted: #898781;
+  --grid: #e1e0d9;
+  --baseline: #c3c2b7;
+  --border: rgba(11,11,11,0.10);
+  --blue: #2a78d6;
+  --aqua: #1baf7a;
+  --yellow: #eda100;
+  --violet: #4a3aa7;
+  --seq-250: #86b6ef;
+  --seq-350: #5598e7;
+  --seq-450: #2a78d6;
+  --seq-550: #1c5cab;
+  --seq-700: #0d366b;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --surface-1: #1a1a19;
+    --page: #0d0d0d;
+    --ink-1: #ffffff;
+    --ink-2: #c3c2b7;
+    --muted: #898781;
+    --grid: #2c2c2a;
+    --baseline: #383835;
+    --border: rgba(255,255,255,0.10);
+    --blue: #3987e5;
+    --aqua: #199e70;
+    --yellow: #c98500;
+    --violet: #9085e9;
+  }
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: system-ui, -apple-system, "Segoe UI", "Microsoft JhengHei", sans-serif;
+  background: var(--page);
+  color: var(--ink-1);
+  line-height: 1.5;
+}
+header {
+  padding: 20px 24px 4px;
+}
+header h1 { font-size: 1.35rem; font-weight: 700; }
+header p { color: var(--ink-2); font-size: 0.85rem; }
+.wrap { padding: 12px 24px 40px; max-width: 1500px; margin: 0 auto; }
+
+/* stat tiles */
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 14px; }
+.tile {
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 16px;
+}
+.tile .label { font-size: 0.75rem; color: var(--muted); }
+.tile .value { font-size: 1.55rem; font-weight: 700; }
+.tile .sub { font-size: 0.72rem; color: var(--ink-2); }
+
+/* layout */
+.main { display: grid; grid-template-columns: 250px 1fr; gap: 14px; align-items: start; }
+@media (max-width: 900px) { .main { grid-template-columns: 1fr; } }
+
+/* filters */
+.panel {
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 16px;
+}
+.panel h3 { font-size: 0.8rem; color: var(--muted); font-weight: 600; margin: 12px 0 6px; text-transform: uppercase; letter-spacing: .04em; }
+.panel h3:first-child { margin-top: 0; }
+.dist-group { display: flex; flex-wrap: wrap; gap: 5px; }
+.chip {
+  font-size: 0.75rem;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--ink-2);
+  border-radius: 20px;
+  padding: 3px 10px;
+  cursor: pointer;
+  user-select: none;
+}
+.chip.on { background: var(--blue); border-color: var(--blue); color: #fff; }
+.rangebox { display: flex; align-items: center; gap: 6px; }
+.rangebox input {
+  width: 100%;
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--page);
+  color: var(--ink-1);
+  font-size: 0.82rem;
+}
+.rangebox span { color: var(--muted); font-size: .8rem; }
+select, input[type="text"] {
+  width: 100%;
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--page);
+  color: var(--ink-1);
+  font-size: 0.82rem;
+}
+.linkbtn { background: none; border: none; color: var(--blue); font-size: .75rem; cursor: pointer; padding: 0; margin-top: 4px; }
+.overlay-row { display: flex; align-items: center; gap: 6px; font-size: .82rem; color: var(--ink-2); margin: 3px 0; cursor: pointer; }
+.reco-item { padding: 6px 8px; margin: 4px 0; border: 1px solid var(--grid); border-radius: 8px; font-size: .78rem; cursor: pointer; }
+.reco-item:hover { background: rgba(74,58,167,.08); }
+.reco-item .r-score { font-weight: 700; color: var(--blue); margin-right: 4px; }
+.reco-item .r-sub { color: var(--muted); }
+.dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+
+/* map */
+#map {
+  height: 620px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface-1);
+}
+.map-legend {
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 0.72rem;
+  color: var(--ink-2);
+  line-height: 1.7;
+}
+.map-legend .row { display: flex; align-items: center; gap: 7px; }
+.leaflet-popup-content { font-family: inherit; font-size: 0.82rem; line-height: 1.45; }
+.leaflet-popup-content .pp-title { font-weight: 700; font-size: .88rem; margin-bottom: 2px; }
+.leaflet-popup-content .pp-price { color: #b3261e; font-weight: 700; }
+.leaflet-popup-content a { color: var(--blue); }
+.leaflet-popup-content .pp-note { color: #898781; font-size: .72rem; }
+
+/* charts */
+.charts { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 14px; }
+@media (max-width: 900px) { .charts { grid-template-columns: 1fr; } }
+.chart-card {
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 16px 8px;
+}
+.chart-card h2 { font-size: 0.92rem; font-weight: 600; margin-bottom: 2px; }
+.chart-card .sub { font-size: 0.75rem; color: var(--muted); margin-bottom: 8px; }
+.chart-card svg { display: block; width: 100%; height: auto; }
+.chart-card svg text { font-family: inherit; }
+
+/* tooltip */
+#tip {
+  position: fixed;
+  pointer-events: none;
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  box-shadow: 0 2px 10px rgba(0,0,0,.15);
+  border-radius: 7px;
+  padding: 6px 10px;
+  font-size: 0.76rem;
+  color: var(--ink-1);
+  z-index: 2000;
+  display: none;
+  max-width: 260px;
+}
+#tip .t1 { font-weight: 600; }
+#tip .t2 { color: var(--ink-2); }
+
+/* table */
+.table-card { margin-top: 14px; overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--grid); white-space: nowrap; }
+th { color: var(--muted); font-weight: 600; cursor: pointer; user-select: none; position: sticky; top: 0; background: var(--surface-1); }
+th .arrow { font-size: .65rem; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+td a { color: var(--blue); text-decoration: none; }
+td a:hover { text-decoration: underline; }
+.count-note { font-size: .75rem; color: var(--muted); margin: 6px 0; }
+footer { color: var(--muted); font-size: .72rem; margin-top: 24px; text-align: center; }
+#loading { padding: 60px; text-align: center; color: var(--muted); }
+</style>
+</head>
+<body>
+<header>
+  <h1>台北租屋分析地圖</h1>
+  <p>台北市 12 區 + 新北市中和/永和 ・ 資料來源：591 租屋網（僅供學習分析用途）</p>
+</header>
+<div class="wrap">
+  <div id="loading">資料載入中…</div>
+  <div id="app" style="display:none">
+    <div class="tiles">
+      <div class="tile"><div class="label">符合條件物件</div><div class="value" id="st-count">–</div><div class="sub" id="st-count-sub"></div></div>
+      <div class="tile"><div class="label">租金中位數</div><div class="value" id="st-med">–</div><div class="sub">元/月</div></div>
+      <div class="tile"><div class="label">每坪租金中位數</div><div class="value" id="st-ping">–</div><div class="sub">元/坪/月</div></div>
+      <div class="tile"><div class="label">坪數中位數</div><div class="value" id="st-area">–</div><div class="sub">坪</div></div>
+    </div>
+
+    <div class="main">
+      <div class="panel">
+        <h3>行政區</h3>
+        <div class="dist-group" id="dist-tp"></div>
+        <h3 style="margin-top:8px">新北市（中永和）</h3>
+        <div class="dist-group" id="dist-nt"></div>
+        <button class="linkbtn" id="dist-all">全選</button>
+        <button class="linkbtn" id="dist-none">全不選</button>
+
+        <h3>月租金（元）</h3>
+        <div class="rangebox">
+          <input type="number" id="f-pmin" placeholder="最低" step="1000">
+          <span>–</span>
+          <input type="number" id="f-pmax" placeholder="最高" step="1000">
+        </div>
+
+        <h3>坪數</h3>
+        <div class="rangebox">
+          <input type="number" id="f-amin" placeholder="最低">
+          <span>–</span>
+          <input type="number" id="f-amax" placeholder="最高">
+        </div>
+
+        <h3>房數</h3>
+        <select id="f-rooms">
+          <option value="">不限</option>
+          <option value="1">1 房</option>
+          <option value="2">2 房</option>
+          <option value="3">3 房</option>
+          <option value="4+">4 房以上</option>
+          <option value="0">套房/未標示</option>
+        </select>
+
+        <h3>類型</h3>
+        <select id="f-kind">
+          <option value="">不限</option>
+          <option value="整層住家">整層住家</option>
+          <option value="獨立套房">獨立套房</option>
+          <option value="分租套房">分租套房</option>
+          <option value="雅房">雅房</option>
+        </select>
+
+        <h3>其他條件</h3>
+        <label class="overlay-row"><input type="checkbox" id="f-pet"> 🐶 可養寵物</label>
+        <label class="overlay-row"><input type="checkbox" id="f-cook"> 🍳 可開伙</label>
+        <label class="overlay-row"><input type="checkbox" id="f-elev"> 🛗 有電梯</label>
+        <label class="overlay-row"><input type="checkbox" id="f-park"> 🚗 附車位</label>
+
+        <h3>關鍵字</h3>
+        <input type="text" id="f-kw" placeholder="標題或地址，如：捷運">
+
+        <h3>🎯 最划算推薦</h3>
+        <div id="reco-list"></div>
+
+        <h3>地圖圖層</h3>
+        <label class="overlay-row"><input type="checkbox" id="ov-mrt"> <span class="dot" style="background:var(--violet)"></span> 捷運出入口</label>
+        <label class="overlay-row"><input type="checkbox" id="ov-bike"> <span class="dot" style="background:var(--yellow)"></span> YouBike 站點</label>
+      </div>
+
+      <div id="map"></div>
+    </div>
+
+    <div class="charts">
+      <div class="chart-card">
+        <h2>各區租金中位數</h2>
+        <div class="sub">元/月（依目前篩選）</div>
+        <div id="ch-district"></div>
+      </div>
+      <div class="chart-card">
+        <h2>各區每坪租金中位數</h2>
+        <div class="sub">元/坪/月（依目前篩選）</div>
+        <div id="ch-ping"></div>
+      </div>
+      <div class="chart-card">
+        <h2>坪數 vs 月租金</h2>
+        <div class="sub" id="scatter-sub">每點為一筆物件</div>
+        <div id="ch-scatter"></div>
+      </div>
+      <div class="chart-card">
+        <h2>租金分布</h2>
+        <div class="sub">物件數量（依目前篩選）</div>
+        <div id="ch-hist"></div>
+      </div>
+    </div>
+
+    <div class="panel table-card">
+      <h2 style="font-size:.92rem">物件清單</h2>
+      <div class="count-note" id="tbl-note"></div>
+      <table id="tbl">
+        <thead><tr>
+          <th class="num" data-k="reco">推薦分 <span class="arrow"></span></th>
+          <th data-k="title">標題</th>
+          <th data-k="district">區域</th>
+          <th data-k="address">地址</th>
+          <th class="num" data-k="price">月租金 <span class="arrow"></span></th>
+          <th class="num" data-k="area">坪數 <span class="arrow"></span></th>
+          <th class="num" data-k="pp">每坪 <span class="arrow"></span></th>
+          <th data-k="layout">格局</th>
+          <th data-k="kind">型態</th>
+          <th data-k="pet">寵物</th>
+          <th data-k="floor">樓層</th>
+        </tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
+    <footer>資料為爬取當日快照，僅供個人分析學習使用。地圖 © OpenStreetMap 貢獻者。</footer>
+  </div>
+</div>
+<div id="tip"></div>
+
+<script>
+const TP_DISTRICTS = ["中正區","大同區","中山區","松山區","大安區","萬華區","信義區","士林區","北投區","內湖區","南港區","文山區"];
+const NT_DISTRICTS = ["永和區","中和區"];
+const ALL_DISTRICTS = [...TP_DISTRICTS, ...NT_DISTRICTS];
+
+let LISTINGS = [], OVERLAYS = {mrt: [], youbike: []};
+let map, markerLayer, mrtLayer, bikeLayer;
+let activeDistricts = new Set(ALL_DISTRICTS);
+let sortKey = "reco", sortAsc = false;
+
+/* ---------- 推薦分數 （CP值） ---------- */
+function recoScore(l) {
+  return l.s_value ?? 50;
+}
+
+const css = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+const fmt = n => n == null ? "–" : Math.round(n).toLocaleString("zh-TW");
+const median = arr => {
+  if (!arr.length) return null;
+  const s = [...arr].sort((a,b)=>a-b), m = Math.floor(s.length/2);
+  return s.length % 2 ? s[m] : (s[m-1]+s[m])/2;
+};
+
+/* 價格分級（sequential blue） */
+const PRICE_BINS = [
+  { max: 15000, color: "#86b6ef", label: "< 1.5 萬" },
+  { max: 25000, color: "#5598e7", label: "1.5 – 2.5 萬" },
+  { max: 40000, color: "#2a78d6", label: "2.5 – 4 萬" },
+  { max: 60000, color: "#1c5cab", label: "4 – 6 萬" },
+  { max: Infinity, color: "#0d366b", label: "> 6 萬" },
+];
+const priceColor = p => PRICE_BINS.find(b => p < b.max || b.max === Infinity).color;
+
+/* ---------- 篩選 ---------- */
+function currentFilter() {
+  const pmin = +document.getElementById("f-pmin").value || 0;
+  const pmax = +document.getElementById("f-pmax").value || Infinity;
+  const amin = +document.getElementById("f-amin").value || 0;
+  const amax = +document.getElementById("f-amax").value || Infinity;
+  const rooms = document.getElementById("f-rooms").value;
+  const kind = document.getElementById("f-kind").value;
+  const needPet = document.getElementById("f-pet").checked;
+  const needCook = document.getElementById("f-cook").checked;
+  const needElev = document.getElementById("f-elev").checked;
+  const needPark = document.getElementById("f-park").checked;
+  const kw = document.getElementById("f-kw").value.trim();
+  return LISTINGS.filter(l => {
+    if (!activeDistricts.has(l.district)) return false;
+    if (l.price == null || l.price < pmin || l.price > pmax) return false;
+    if (l.area != null && (l.area < amin || l.area > amax)) return false;
+    if (l.area == null && (amin > 0 || amax < Infinity)) { /* 未標坪數者僅在未設坪數條件時顯示 */ if (amin > 0) return false; }
+    if (rooms === "0" && l.rooms != null) return false;
+    else if (rooms === "4+" && (l.rooms == null || l.rooms < 4)) return false;
+    else if (rooms && rooms !== "0" && rooms !== "4+" && l.rooms !== +rooms) return false;
+    if (kind && !(l.kind || "").includes(kind)) return false;
+    if (needPet && l.pet !== true) return false;
+    if (needCook && l.cook !== true) return false;
+    if (needElev && l.elevator !== true) return false;
+    if (needPark && l.has_parking !== true) return false;
+    if (kw && !(l.title + (l.address||"")).includes(kw)) return false;
+    return true;
+  });
+}
+
+/* ---------- 統計 tiles ---------- */
+function renderStats(rows) {
+  document.getElementById("st-count").textContent = rows.length.toLocaleString();
+  document.getElementById("st-count-sub").textContent = `全部資料 ${LISTINGS.length.toLocaleString()} 筆`;
+  document.getElementById("st-med").textContent = fmt(median(rows.map(r=>r.price)));
+  const pp = rows.filter(r=>r.area>1).map(r=>r.price/r.area);
+  document.getElementById("st-ping").textContent = fmt(median(pp));
+  const ar = median(rows.filter(r=>r.area>0).map(r=>r.area));
+  document.getElementById("st-area").textContent = ar==null ? "–" : ar.toFixed(1);
+}
+
+/* ---------- 地圖 ---------- */
+function initMap() {
+  map = L.map("map", { preferCanvas: true }).setView([25.03, 121.53], 12);
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    attribution: "© OpenStreetMap"
+  }).addTo(map);
+
+  markerLayer = L.layerGroup().addTo(map);
+
+  mrtLayer = L.layerGroup();
+  OVERLAYS.mrt.forEach(s => {
+    L.circleMarker([s.lat, s.lng], { radius: 3.5, color: "#fff", weight: 1, fillColor: css("--violet") || "#4a3aa7", fillOpacity: 0.95 })
+      .bindPopup(`🚇 ${s.name}`).addTo(mrtLayer);
+  });
+  bikeLayer = L.layerGroup();
+  OVERLAYS.youbike.forEach(s => {
+    L.circleMarker([s.lat, s.lng], { radius: 2.5, color: "#fff", weight: .8, fillColor: "#eda100", fillOpacity: 0.9 })
+      .bindPopup(`🚲 ${s.name}`).addTo(bikeLayer);
+  });
+
+  const legend = L.control({ position: "bottomright" });
+  legend.onAdd = () => {
+    const div = L.DomUtil.create("div", "map-legend");
+    div.innerHTML = "<b>月租金</b>" + PRICE_BINS.map(b =>
+      `<div class="row"><span class="dot" style="background:${b.color}"></span>${b.label}</div>`).join("");
+    return div;
+  };
+  legend.addTo(map);
+
+  document.getElementById("ov-mrt").addEventListener("change", e =>
+    e.target.checked ? mrtLayer.addTo(map) : map.removeLayer(mrtLayer));
+  document.getElementById("ov-bike").addEventListener("change", e =>
+    e.target.checked ? bikeLayer.addTo(map) : map.removeLayer(bikeLayer));
+}
+
+let markerById = {};
+function renderMap(rows) {
+  markerLayer.clearLayers();
+  markerById = {};
+  rows.forEach(l => {
+    const pp = l.area > 1 ? Math.round(l.price / l.area).toLocaleString() : "–";
+    const m = L.circleMarker([l.lat, l.lng], {
+      radius: 6, color: "#ffffff", weight: 1.2,
+      fillColor: priceColor(l.price), fillOpacity: 0.92
+    });
+    const conds = [
+      l.pet === true ? "🐶 可養寵物" : (l.pet === false ? "🚫 不可寵物" : ""),
+      l.cook === true ? "🍳 可開伙" : "",
+      l.elevator === true ? "🛗 電梯" : "",
+      l.has_parking === true ? "🚗 車位" : "",
+    ].filter(Boolean).join("　");
+    const diff = l.pred_price ? Math.round((l.price - l.pred_price) / l.pred_price * 100) : null;
+    m.bindPopup(`
+      <div class="pp-title">${l.title}</div>
+      <div>${l.district}・${l.address || ""}</div>
+      <div class="pp-price">${fmt(l.price)} 元/月</div>
+      <div>💰 CP值分數 <b>${Math.round(recoScore(l))}</b>${l.pred_price ? `｜行情約 ${fmt(l.pred_price)} 元` : ""}${diff != null && !l.anomaly ? `（${diff <= 0 ? "便宜" : "貴"} ${Math.abs(diff)}%）` : ""}</div>
+      ${l.anomaly ? '<div class="pp-note">⚠ 租金遠低於行情，可能為床位/共居/非整戶，請留意</div>' : ""}
+      ${l.mrt_m != null ? `<div>🚇 最近捷運出入口 ${l.mrt_m >= 1000 ? (l.mrt_m/1000).toFixed(1) + " 公里" : l.mrt_m + " 公尺"}｜🚲 500m 內 YouBike ${l.bike_n} 站</div>` : ""}
+      <div>${l.kind ? l.kind + "・" : ""}${l.building ? l.building + "・" : ""}${l.area ? l.area + " 坪" : ""} ${l.layout ? "・" + l.layout : ""} ${l.floor_now ? `・${l.floor_now}/${l.floor_total}樓` : ""}${l.age ? `・屋齡${l.age}年` : ""}</div>
+      <div>每坪約 ${pp} 元</div>
+      ${conds ? `<div>${conds}</div>` : ""}
+      <a href="${l.href}" target="_blank" rel="noopener">查看物件 ↗</a>
+      ${l.geo_approx ? '<div class="pp-note">⚠ 位置為區內約略位置</div>' : ''}
+    `);
+    markerLayer.addLayer(m);
+    markerById[l.house_id] = m;
+  });
+}
+
+/* ---------- Top 10 推薦清單 ---------- */
+function renderReco(rows) {
+  const top = rows
+    .filter(l => !l.anomaly)
+    .map(l => ({ l, s: recoScore(l) }))
+    .sort((a, b) => b.s - a.s)
+    .slice(0, 10);
+  const box = document.getElementById("reco-list");
+  box.innerHTML = top.map(({ l, s }) => `
+    <div class="reco-item" data-id="${l.house_id}">
+      <span class="r-score">${Math.round(s)}</span>${l.title.slice(0, 18)}
+      <div class="r-sub">${l.district}・${fmt(l.price)} 元${l.pred_price && l.price < l.pred_price ? `・比行情省 ${Math.round((1 - l.price / l.pred_price) * 100)}%` : ""}</div>
+    </div>`).join("");
+  box.querySelectorAll(".reco-item").forEach(el => el.addEventListener("click", () => {
+    const l = LISTINGS.find(x => x.house_id === el.dataset.id);
+    if (!l) return;
+    map.setView([l.lat, l.lng], 16);
+    const m = markerById[l.house_id];
+    if (m) m.openPopup();
+    document.getElementById("map").scrollIntoView({ behavior: "smooth", block: "center" });
+  }));
+}
+
+/* ---------- SVG 圖表工具 ---------- */
+const tip = document.getElementById("tip");
+function showTip(html, ev) {
+  tip.innerHTML = html;
+  tip.style.display = "block";
+  const x = Math.min(ev.clientX + 14, window.innerWidth - 280);
+  tip.style.left = x + "px";
+  tip.style.top = (ev.clientY + 14) + "px";
+}
+function hideTip() { tip.style.display = "none"; }
+
+function svgEl(tag, attrs) {
+  const el = document.createElementNS("http://www.w3.org/2000/svg", tag);
+  for (const k in attrs) el.setAttribute(k, attrs[k]);
+  return el;
+}
+
+/* 橫向 bar chart：各區中位數 */
+function renderBarChart(containerId, rows, valueFn, color, unit) {
+  const byDist = ALL_DISTRICTS
+    .map(d => {
+      const vals = rows.filter(r => r.district === d).map(valueFn).filter(v => v != null && isFinite(v));
+      return { d, v: median(vals), n: vals.length };
+    })
+    .filter(x => x.v != null)
+    .sort((a,b) => b.v - a.v);
+
+  const W = 560, rowH = 24, padL = 64, padR = 62, padT = 4;
+  const H = padT + byDist.length * rowH + 8;
+  const maxV = Math.max(...byDist.map(x=>x.v), 1);
+  const svg = svgEl("svg", { viewBox: `0 0 ${W} ${H}` });
+
+  byDist.forEach((x, i) => {
+    const y = padT + i * rowH;
+    const w = Math.max((x.v / maxV) * (W - padL - padR), 2);
+    const isNT = NT_DISTRICTS.includes(x.d);
+    const lbl = svgEl("text", { x: padL - 8, y: y + rowH/2 + 4, "text-anchor": "end", "font-size": 12, fill: css("--ink-2") });
+    lbl.textContent = x.d + (isNT ? "*" : "");
+    svg.appendChild(lbl);
+    const bar = svgEl("rect", { x: padL, y: y + 4, width: w, height: rowH - 9, rx: 3.5, fill: color });
+    bar.style.cursor = "default";
+    bar.addEventListener("mousemove", ev => showTip(
+      `<div class="t1">${x.d}</div><div class="t2">${fmt(x.v)} ${unit}・${x.n} 筆</div>`, ev));
+    bar.addEventListener("mouseleave", hideTip);
+    svg.appendChild(bar);
+    const val = svgEl("text", { x: padL + w + 6, y: y + rowH/2 + 4, "font-size": 11, fill: css("--muted") });
+    val.textContent = fmt(x.v);
+    svg.appendChild(val);
+  });
+  const c = document.getElementById(containerId);
+  c.innerHTML = "";
+  c.appendChild(svg);
+}
+
+/* 散點圖：坪數 vs 租金 */
+function renderScatter(rows) {
+  const pts = rows.filter(r => r.area > 0 && r.area <= 120 && r.price > 0 && r.price <= 200000);
+  const W = 560, H = 320, padL = 56, padR = 14, padT = 10, padB = 34;
+  const maxX = Math.max(...pts.map(p=>p.area), 10);
+  const maxY = Math.max(...pts.map(p=>p.price), 10000);
+  const sx = a => padL + (a / maxX) * (W - padL - padR);
+  const sy = p => H - padB - (p / maxY) * (H - padT - padB);
+  const svg = svgEl("svg", { viewBox: `0 0 ${W} ${H}` });
+
+  // 格線 + 軸標
+  for (let i = 0; i <= 4; i++) {
+    const v = maxY * i / 4, y = sy(v);
+    svg.appendChild(svgEl("line", { x1: padL, x2: W - padR, y1: y, y2: y, stroke: css("--grid"), "stroke-width": 1 }));
+    const t = svgEl("text", { x: padL - 6, y: y + 4, "text-anchor": "end", "font-size": 10, fill: css("--muted") });
+    t.textContent = v >= 10000 ? (v/10000).toFixed(v % 10000 ? 1 : 0) + "萬" : fmt(v);
+    svg.appendChild(t);
+  }
+  for (let i = 0; i <= 4; i++) {
+    const v = maxX * i / 4, x = sx(v);
+    const t = svgEl("text", { x, y: H - padB + 16, "text-anchor": "middle", "font-size": 10, fill: css("--muted") });
+    t.textContent = Math.round(v) + "坪";
+    svg.appendChild(t);
+  }
+  svg.appendChild(svgEl("line", { x1: padL, x2: W - padR, y1: H - padB, y2: H - padB, stroke: css("--baseline"), "stroke-width": 1 }));
+
+  const cTP = css("--blue"), cNT = css("--yellow");
+  // 點太多會拖垮瀏覽器，超過上限就等距抽樣
+  const MAXPTS = 2500;
+  let drawn = pts;
+  if (pts.length > MAXPTS) {
+    const step = pts.length / MAXPTS;
+    drawn = Array.from({ length: MAXPTS }, (_, i) => pts[Math.floor(i * step)]);
+  }
+  drawn.forEach(p => {
+    const dot = svgEl("circle", {
+      cx: sx(p.area), cy: sy(p.price), r: 3.5,
+      fill: p.city === "新北市" ? cNT : cTP,
+      "fill-opacity": 0.55, stroke: css("--surface-1"), "stroke-width": 0.6
+    });
+    dot.addEventListener("mousemove", ev => showTip(
+      `<div class="t1">${p.title}</div><div class="t2">${p.district}・${p.area} 坪・${fmt(p.price)} 元/月</div>`, ev));
+    dot.addEventListener("mouseleave", hideTip);
+    svg.appendChild(dot);
+  });
+
+  // 圖例
+  const lg = [["台北市", cTP], ["新北市（中永和）", cNT]];
+  lg.forEach(([name, color], i) => {
+    const x = padL + 10 + i * 120;
+    svg.appendChild(svgEl("circle", { cx: x, cy: padT + 8, r: 5, fill: color }));
+    const t = svgEl("text", { x: x + 10, y: padT + 12, "font-size": 11, fill: css("--ink-2") });
+    t.textContent = name;
+    svg.appendChild(t);
+  });
+
+  const omitted = rows.length - pts.length;
+  const sampled = pts.length - drawn.length;
+  document.getElementById("scatter-sub").textContent =
+    `每點為一筆物件${omitted > 0 ? `（${omitted} 筆超出範圍或無坪數，未顯示）` : ""}${sampled > 0 ? `（點數過多，抽樣顯示 ${drawn.length} 筆）` : ""}`;
+  const c = document.getElementById("ch-scatter");
+  c.innerHTML = "";
+  c.appendChild(svg);
+}
+
+/* 直方圖：租金分布 */
+function renderHist(rows) {
+  const binW = 5000, maxP = 100000;
+  const bins = [];
+  for (let lo = 0; lo < maxP; lo += binW) bins.push({ lo, hi: lo + binW, n: 0 });
+  bins.push({ lo: maxP, hi: Infinity, n: 0 });
+  rows.forEach(r => {
+    const b = r.price >= maxP ? bins[bins.length-1] : bins[Math.floor(r.price / binW)];
+    if (b) b.n++;
+  });
+  const W = 560, H = 260, padL = 40, padR = 10, padT = 8, padB = 32;
+  const maxN = Math.max(...bins.map(b=>b.n), 1);
+  const bw = (W - padL - padR) / bins.length;
+  const svg = svgEl("svg", { viewBox: `0 0 ${W} ${H}` });
+
+  for (let i = 0; i <= 3; i++) {
+    const v = Math.round(maxN * i / 3), y = H - padB - (v/maxN)*(H-padT-padB);
+    svg.appendChild(svgEl("line", { x1: padL, x2: W-padR, y1: y, y2: y, stroke: css("--grid") }));
+    const t = svgEl("text", { x: padL - 5, y: y + 4, "text-anchor": "end", "font-size": 10, fill: css("--muted") });
+    t.textContent = v;
+    svg.appendChild(t);
+  }
+  bins.forEach((b, i) => {
+    if (!b.n) return;
+    const h = (b.n / maxN) * (H - padT - padB);
+    const bar = svgEl("rect", {
+      x: padL + i * bw + 1, y: H - padB - h,
+      width: bw - 2, height: h, rx: 3, fill: css("--blue")
+    });
+    const label = b.hi === Infinity ? "10萬+" : `${b.lo/10000}–${b.hi/10000}萬`;
+    bar.addEventListener("mousemove", ev => showTip(`<div class="t1">${label}</div><div class="t2">${b.n} 筆</div>`, ev));
+    bar.addEventListener("mouseleave", hideTip);
+    svg.appendChild(bar);
+  });
+  svg.appendChild(svgEl("line", { x1: padL, x2: W-padR, y1: H-padB, y2: H-padB, stroke: css("--baseline") }));
+  [0, 2, 4, 6, 8, 10].forEach(w => {
+    const x = padL + (w*10000/binW) * bw;
+    const t = svgEl("text", { x, y: H - padB + 16, "text-anchor": "middle", "font-size": 10, fill: css("--muted") });
+    t.textContent = w + "萬";
+    svg.appendChild(t);
+  });
+  const c = document.getElementById("ch-hist");
+  c.innerHTML = "";
+  c.appendChild(svg);
+}
+
+/* ---------- 表格 ---------- */
+function renderTable(rows) {
+  const enriched = rows.map(r => ({ ...r, reco: recoScore(r), pp: r.area > 1 ? r.price / r.area : null, floor: r.floor_now ? `${r.floor_now}/${r.floor_total}` : "" }));
+  enriched.sort((a, b) => {
+    let va = a[sortKey], vb = b[sortKey];
+    if (va == null) return 1;
+    if (vb == null) return -1;
+    if (typeof va === "string") return sortAsc ? va.localeCompare(vb, "zh-TW") : vb.localeCompare(va, "zh-TW");
+    return sortAsc ? va - vb : vb - va;
+  });
+  const shown = enriched.slice(0, 100);
+  document.getElementById("tbl-note").textContent =
+    `顯示 ${shown.length} / ${rows.length} 筆（點欄位標題可排序）`;
+  const tbody = document.querySelector("#tbl tbody");
+  tbody.innerHTML = shown.map(r => `
+    <tr>
+      <td class="num"><b>${Math.round(r.reco)}</b></td>
+      <td><a href="${r.href}" target="_blank" rel="noopener">${r.title}</a></td>
+      <td>${r.city === "新北市" ? "新北・" : ""}${r.district}</td>
+      <td>${r.address || ""}</td>
+      <td class="num">${fmt(r.price)}</td>
+      <td class="num">${r.area ?? ""}</td>
+      <td class="num">${r.pp ? fmt(r.pp) : ""}</td>
+      <td>${r.layout || ""}</td>
+      <td>${r.kind || ""}</td>
+      <td>${r.pet === true ? "🐶 可" : (r.pet === false ? "不可" : "")}</td>
+      <td>${r.floor}</td>
+    </tr>`).join("");
+  document.querySelectorAll("#tbl th").forEach(th => {
+    th.querySelector(".arrow") && (th.querySelector(".arrow").textContent =
+      th.dataset.k === sortKey ? (sortAsc ? "▲" : "▼") : "");
+  });
+}
+
+/* ---------- 主更新 ---------- */
+function update() {
+  const rows = currentFilter();
+  renderStats(rows);
+  renderMap(rows);
+  renderBarChart("ch-district", rows, r => r.price, css("--blue"), "元/月");
+  renderBarChart("ch-ping", rows, r => r.area > 1 ? r.price / r.area : null, css("--aqua"), "元/坪/月");
+  renderScatter(rows);
+  renderHist(rows);
+  renderTable(rows);
+  renderReco(rows);
+}
+
+/* ---------- 初始化 ---------- */
+function buildDistrictChips() {
+  const mk = (d, parent) => {
+    const b = document.createElement("button");
+    b.className = "chip on";
+    b.textContent = d.replace("區", "");
+    b.onclick = () => {
+      if (activeDistricts.has(d)) { activeDistricts.delete(d); b.classList.remove("on"); }
+      else { activeDistricts.add(d); b.classList.add("on"); }
+      update();
+    };
+    b.dataset.d = d;
+    parent.appendChild(b);
+  };
+  TP_DISTRICTS.forEach(d => mk(d, document.getElementById("dist-tp")));
+  NT_DISTRICTS.forEach(d => mk(d, document.getElementById("dist-nt")));
+  document.getElementById("dist-all").onclick = () => {
+    activeDistricts = new Set(ALL_DISTRICTS);
+    document.querySelectorAll(".chip").forEach(c => c.classList.add("on"));
+    update();
+  };
+  document.getElementById("dist-none").onclick = () => {
+    activeDistricts.clear();
+    document.querySelectorAll(".chip").forEach(c => c.classList.remove("on"));
+    update();
+  };
+}
+
+let debounceT;
+function bindFilters() {
+  ["f-pmin","f-pmax","f-amin","f-amax","f-kw"].forEach(id =>
+    document.getElementById(id).addEventListener("input", () => {
+      clearTimeout(debounceT);
+      debounceT = setTimeout(update, 300);
+    }));
+  document.getElementById("f-rooms").addEventListener("change", update);
+  document.getElementById("f-kind").addEventListener("change", update);
+  ["f-pet","f-cook","f-elev","f-park"].forEach(id =>
+    document.getElementById(id).addEventListener("change", update));
+  document.querySelectorAll("#tbl th").forEach(th =>
+    th.addEventListener("click", () => {
+      const k = th.dataset.k;
+      if (sortKey === k) sortAsc = !sortAsc;
+      else { sortKey = k; sortAsc = true; }
+      renderTable(currentFilter());
+    }));
+}
+
+async function boot() {
+  const [lr, or] = await Promise.all([
+    fetch("listings.json"), fetch("overlays.json").catch(() => null)
+  ]);
+  LISTINGS = (await lr.json()).filter(l => l.price > 0 && l.lat && l.lng);
+  if (or && or.ok) OVERLAYS = await or.json();
+
+  document.getElementById("loading").style.display = "none";
+  document.getElementById("app").style.display = "block";
+  buildDistrictChips();
+  bindFilters();
+  initMap();
+  update();
+}
+boot().catch(e => {
+  document.getElementById("loading").textContent = "資料載入失敗：" + e.message + "（請先執行 scraper.py 與 geocode.py）";
+});
+</script>
+</body>
+</html>

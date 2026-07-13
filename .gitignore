@@ -1,0 +1,4 @@
+__pycache__/
+*.log
+_sinyi_backup/
+.claude/
