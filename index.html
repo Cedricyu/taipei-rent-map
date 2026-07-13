@@ -259,15 +259,15 @@ function recoScore(l) {
 const css = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 const fmt = n => n == null ? "–" : Math.round(n).toLocaleString("zh-TW");
 
-/* 價格分級（sequential blue） */
-const PRICE_BINS = [
-  { max: 15000, color: "#86b6ef", label: "< 1.5 萬" },
-  { max: 25000, color: "#5598e7", label: "1.5 – 2.5 萬" },
-  { max: 40000, color: "#2a78d6", label: "2.5 – 4 萬" },
-  { max: 60000, color: "#1c5cab", label: "4 – 6 萬" },
-  { max: Infinity, color: "#0d366b", label: "> 6 萬" },
+/* 推薦程度分級（sequential blue，越深越划算） */
+const RECO_BINS = [
+  { min: 80, color: "#0d366b", label: "80+（最划算）" },
+  { min: 60, color: "#1c5cab", label: "60 – 80" },
+  { min: 40, color: "#2a78d6", label: "40 – 60" },
+  { min: 20, color: "#5598e7", label: "20 – 40" },
+  { min: -1, color: "#b7d3f3", label: "< 20（比行情貴）" },
 ];
-const priceColor = p => PRICE_BINS.find(b => p < b.max || b.max === Infinity).color;
+const recoColor = l => RECO_BINS.find(b => recoScore(l) >= b.min).color;
 
 /* ---------- 篩選 ---------- */
 function currentFilter() {
@@ -323,7 +323,7 @@ function initMap() {
   const legend = L.control({ position: "bottomright" });
   legend.onAdd = () => {
     const div = L.DomUtil.create("div", "map-legend");
-    div.innerHTML = "<b>月租金</b>" + PRICE_BINS.map(b =>
+    div.innerHTML = "<b>推薦分（CP值）</b>" + RECO_BINS.map(b =>
       `<div class="row"><span class="dot" style="background:${b.color}"></span>${b.label}</div>`).join("");
     return div;
   };
@@ -343,7 +343,7 @@ function renderMap(rows) {
     const pp = l.area > 1 ? Math.round(l.price / l.area).toLocaleString() : "–";
     const m = L.circleMarker([l.lat, l.lng], {
       radius: 6, color: "#ffffff", weight: 1.2,
-      fillColor: priceColor(l.price), fillOpacity: 0.92
+      fillColor: recoColor(l), fillOpacity: 0.92
     });
     const conds = [
       l.pet === true ? "🐶 可養寵物" : (l.pet === false ? "🚫 不可寵物" : ""),
