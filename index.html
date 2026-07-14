@@ -103,9 +103,6 @@ select, input[type="text"] {
 }
 .linkbtn { background: none; border: none; color: var(--blue); font-size: .75rem; cursor: pointer; padding: 0; margin-top: 4px; }
 .overlay-row { display: flex; align-items: center; gap: 6px; font-size: .82rem; color: var(--ink-2); margin: 3px 0; cursor: pointer; }
-.reco-item { padding: 6px 8px; margin: 4px 0; border: 1px solid var(--grid); border-radius: 8px; font-size: .78rem; cursor: pointer; }
-.reco-item:hover { background: rgba(74,58,167,.08); }
-.reco-item .r-sub { color: var(--muted); }
 .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
 
 /* map */
@@ -203,9 +200,6 @@ footer { color: var(--muted); font-size: .72rem; margin-top: 24px; text-align: c
 
         <h3>關鍵字</h3>
         <input type="text" id="f-kw" placeholder="標題或地址，如：捷運">
-
-        <h3>🎯 最划算推薦</h3>
-        <div id="reco-list"></div>
 
         <h3>地圖圖層</h3>
         <label class="overlay-row"><input type="checkbox" id="ov-mrt"> <span class="dot" style="background:var(--violet)"></span> 捷運出入口</label>
@@ -369,29 +363,6 @@ function renderMap(rows) {
   });
 }
 
-/* ---------- Top 10 推薦清單 ---------- */
-function renderReco(rows) {
-  const top = rows
-    .filter(l => !l.anomaly)
-    .map(l => ({ l, s: recoScore(l) }))
-    .sort((a, b) => b.s - a.s)
-    .slice(0, 10);
-  const box = document.getElementById("reco-list");
-  box.innerHTML = top.map(({ l, s }) => `
-    <div class="reco-item" data-id="${l.house_id}">
-      ${l.title.slice(0, 18)}
-      <div class="r-sub">${l.district}・${fmt(l.price)} 元${l.pred_price && l.price < l.pred_price ? `・比行情省 ${Math.round((1 - l.price / l.pred_price) * 100)}%` : ""}</div>
-    </div>`).join("");
-  box.querySelectorAll(".reco-item").forEach(el => el.addEventListener("click", () => {
-    const l = LISTINGS.find(x => x.house_id === el.dataset.id);
-    if (!l) return;
-    map.setView([l.lat, l.lng], 16);
-    const m = markerById[l.house_id];
-    if (m) m.openPopup();
-    document.getElementById("map").scrollIntoView({ behavior: "smooth", block: "center" });
-  }));
-}
-
 /* ---------- 表格 ---------- */
 function renderTable(rows) {
   const enriched = rows.map(r => ({ ...r, reco: recoScore(r), pp: r.area > 1 ? r.price / r.area : null, floor: r.floor_now ? `${r.floor_now}/${r.floor_total}` : "" }));
@@ -431,7 +402,6 @@ function update() {
   const rows = currentFilter();
   renderMap(rows);
   renderTable(rows);
-  renderReco(rows);
 }
 
 /* ---------- 初始化 ---------- */
