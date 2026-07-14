@@ -105,7 +105,6 @@ select, input[type="text"] {
 .overlay-row { display: flex; align-items: center; gap: 6px; font-size: .82rem; color: var(--ink-2); margin: 3px 0; cursor: pointer; }
 .reco-item { padding: 6px 8px; margin: 4px 0; border: 1px solid var(--grid); border-radius: 8px; font-size: .78rem; cursor: pointer; }
 .reco-item:hover { background: rgba(74,58,167,.08); }
-.reco-item .r-score { font-weight: 700; color: var(--blue); margin-right: 4px; }
 .reco-item .r-sub { color: var(--muted); }
 .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
 
@@ -380,7 +379,7 @@ function renderReco(rows) {
   const box = document.getElementById("reco-list");
   box.innerHTML = top.map(({ l, s }) => `
     <div class="reco-item" data-id="${l.house_id}">
-      <span class="r-score">${Math.round(s)}</span>${l.title.slice(0, 18)}
+      ${l.title.slice(0, 18)}
       <div class="r-sub">${l.district}・${fmt(l.price)} 元${l.pred_price && l.price < l.pred_price ? `・比行情省 ${Math.round((1 - l.price / l.pred_price) * 100)}%` : ""}</div>
     </div>`).join("");
   box.querySelectorAll(".reco-item").forEach(el => el.addEventListener("click", () => {
